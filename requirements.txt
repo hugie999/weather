@@ -1,0 +1,7 @@
+flet
+flet_easy
+requests
+env-canada
+BlurWindow
+pywin32
+flet_restyle
