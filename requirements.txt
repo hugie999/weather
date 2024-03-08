@@ -1,7 +1,10 @@
-flet
+flet==0.20.2
 flet_easy
 requests
 env-canada
 BlurWindow
 pywin32
 flet_restyle
+win32mica
+accentcolordetect
+winsdk

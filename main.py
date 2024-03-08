@@ -7,17 +7,42 @@ import BlurWindow.blurWindow as blurwindow #i hate capital letters sorry
 import flet_restyle
 import json
 import os
+import time
 import winsdk.windows.devices.geolocation as gps
 import winsdk.windows.ui.accessibility as winAccessibility
+import accentcolordetect
 import datetime
 import sys
 import math
+import textwrap
+import win32mica
+from copy import deepcopy
+from ctypes import windll #for mica
+
+licenses = ("""none""",) # might use other open scource thingys
 
 # envcan.ECWeather()
 SiteList = []
-print("open preferences...")
-prefs = {"unit":"C","defaultST":None,"enableAlerts":True}
+print("open preferences...")                                             #theme mode [acrylic,mica,none]
+prefs = {"unit":"C","defaultST":None,"enableAlerts":True,"iconTheme":"canada","themeMode":"acrylic"}
+
+icons = {"canada":()}
+
+def getDefaultView() -> ft.View:
+    defaultView = ft.View()
+    defaultView.bgcolor = ft.colors.TRANSPARENT
+    if prefs['themeMode'] == "opaque":
+        defaultView.bgcolor = accentcolordetect.accent()[1]
+    
+    return defaultView
+
 appdataLoc = os.getenv('APPDATA')
+
+def createIcon(code:int,baseImg:ft.Image  =ft.Image(width=128,scale=2)) -> ft.Image:
+    if prefs["iconTheme"] == "canada":
+        baseImg.src = f"https://weather.gc.ca/weathericons/{code}.gif"
+
+    return baseImg
 
 def loadPrefs():
     global prefs
@@ -72,7 +97,7 @@ except json.decoder.JSONDecodeError:
 with open("site_list_towns_en.csv") as f:
     siteListCSV = csv.reader(f,delimiter=",")
     for i in siteListCSV:
-        print(i)
+        # print(i)
         SiteList.append({"id":i[0],"name":i[1],"province":i[2],"location":(i[3],i[4])})
     SiteList = tuple(SiteList)
 
@@ -80,6 +105,7 @@ with open("site_list_towns_en.csv") as f:
 
 # s0000280 for testing (dw im not doxing myself st. johns is the bigest city in my province)
 def updateWeather(st:str="NL/s0000280",coords=(0,0)) -> envcan.ECWeather:
+    print(f"station: '{st}'")
     if st:
         weather = envcan.ECWeather(station_id=st)
     elif coords:
@@ -99,7 +125,7 @@ buttonTheme = ft.ButtonStyle(elevation=0,side=
                                  ft.MaterialState.DEFAULT:ft.BorderSide(0,ft.colors.TRANSPARENT)},
                              shape={ft.MaterialState.DEFAULT:ft.RoundedRectangleBorder(radius=0)},
                              animation_duration=100)
-                            #  bgcolor=ft.colors.with_opacity(0.5,ft.colors.WHITE),
+                            #  bgcolor=f-t.colors.with_opacity(0.5,ft.colors.WHITE),
                             #  color=ft.colors.with_opacity(0.5,ft.colors.WHITE),
                             #  overlay_color=ft.colors.TRANSPARENT,
                             #  surface_tint_color=ft.colors.TRANSPARENT)
@@ -109,41 +135,105 @@ def getLocation() -> tuple:
     loc = asyncio.run(getPosition()).coordinate
     locCords = (loc.latitude,loc.longitude)
     return locCords
-weather = updateWeather(coords=getLocation())
-@app.page("/home")
+
+if prefs["defaultST"]:
+    weather = updateWeather(st= prefs["defaultST"])
+else:
+    weather = updateWeather(coords=getLocation())
+
+# print(getLocation())
+# exit(1)
+
+print(weather.conditions)
+print("\n")
+@app.page("/home",page_clear=True)
 def homePage(data: fteasy.Datasy):
+    global weather
+    print(data.page.views)
+    view = getDefaultView()
+    view.route = "/home"
+    view.appbar = ft.AppBar(
+        title=ft.Text(f"Current weather for {weather.metadata['location']}"),
+        center_title=True,
+        bgcolor=ft.colors.TRANSPARENT,
+        actions=[ft.ElevatedButton("Change location...",on_click=lambda _:data.go('/setting/setSTmanual')),
+                 ft.IconButton(ft.icons.REFRESH,on_click= lambda _:[weather := updateWeather(), data.go("/home"), print('a')]),
+                 ft.PopupMenuButton(items=[
+                    ft.PopupMenuItem(icon=ft.icons.ABC,text="temp")
+                ]
+        )],
+        leading=None
+    )
+    
+    if weather.conditions == {}:
+        print("no conditions!")
+        conditions = weather.daily_forecasts[0]
+        isFullConditions = False
+        print()
+        print(conditions)
+        print()
+        
+        # data.go("/errors/jsonempty")
+        # return ft.View()
+    else:
+        isFullConditions = True
+        conditions = weather.conditions
     # envcan.ECWeather().site_list
     if data.page.banner: #show alert again
         if not data.page.banner.open:
             data.page.banner.open = True
-    view = ft.View("/home",bgcolor=ft.colors.TRANSPARENT)
-    
-    
+    if not isFullConditions:
+        print(weather.station_id)
+        view.controls.append(ft.Container(
+            ft.Row([ft.Text(
+                    f"couldn't get full conditions for station {weather.metadata['location']} ({weather.station_id})"+\
+                        (" it may be um-manned try again in the morning" if time.localtime(time.time()).tm_hour in [21,22,23,0,1,2,3,4,5,6,7] else " try again later...")
+                        ),
+                    ft.ElevatedButton(text="Change station",on_click= lambda _: data.go("/setting/setSTmanual"))],
+                   alignment=ft.MainAxisAlignment.CENTER),
+            expand=1,bgcolor=ft.colors.with_opacity(0.5,ft.colors.RED),alignment=ft.alignment.center,border_radius=10,padding=ft.Padding(5,2,2,5)))
+    print()
+    print(weather.hourly_forecasts)
+    print()
+    print(weather.conditions)
+    print()
     
     # view.appbar = ft.AppBar(title=ft.Text(f"Weather in : {weather.metadata['location']}"),actions=[ft.IconButton(ft.icons.REFRESH,on_click= lambda _: data.go('/refresh'))])
     # view.vertical_alignment   = ft.MainAxisAlignment.CENTER
     # view.horizontal_alignment = ft.MainAxisAlignment.CENTER
     
     #all my homies hate radians
-    # if not weather.conditions['wind_dir']['value'] in ["N","NE","E","SE","S","SW","W","NW"]:
+    # if not conditions['wind_dir']['value'] in ["N","NE","E","SE","S","SW","W","NW"]:
     #     origWinDir = "?"
     #     windIcon = ft.icons.QUESTION_MARK
-    #     print(f"not recognised: {weather.conditions['wind_dir']['value']}")
+    #     print(f"not recognised: {conditions['wind_dir']['value']}")
     # else:
-    #     origWinDir = weather.conditions['wind_dir']['value']
+    #     origWinDir = conditions['wind_dir']['value']
     #     windIcon = ft.icons.ARROW_UPWARD
     # windDirection = [0,0.785398,1.5708,2.35619,3.14159,-2.35619,-1.5708,-0.785398,0][["N","NE","E","SE","S","SW","W","NW","?"].index(origWinDir)]
     
-    origWinDir = weather.conditions['wind_dir']['value']
-    windIcon = ft.icons.ARROW_UPWARD
-    windDirection = math.radians(("N","NNE","NE","ENE","E","ESE", "SE", "SSE","S","SSW","SW","WSW","W","WNW","NW","NNW").index(origWinDir)*22.5)
-    windName = {"N":"Northern","NNE":"North eastern","NE":"North eastern","ENE":"North eastern","E":"Eastern","ESE":"South eastern", "SE":"South eastern", "SSE":"South eastern","S":"South eastern","SSW":"South western","SW":"South western","WSW":"South western","W":"Western","WNW":"North western","NW":"North western","NNW":"North western"}[origWinDir] #big boi line
+    if isFullConditions:
+        try:
+            origWinDir = conditions['wind_dir']['value']
+            windIcon = ft.icons.ARROW_UPWARD
+            windDirection = math.radians(("N","NNE","NE","ENE","E","ESE", "SE", "SSE","S","SSW","SW","WSW","W","WNW","NW","NNW").index(origWinDir)*22.5)
+            windName = {"N":"Northern","NNE":"North eastern","NE":"North eastern","ENE":"North eastern","E":"Eastern","ESE":"South eastern", "SE":"South eastern", "SSE":"South eastern","S":"South eastern","SSW":"South western","SW":"South western","WSW":"South western","W":"Western","WNW":"North western","NW":"North western","NNW":"North western"}[origWinDir] #big boi line
+        except KeyError:
+            origWinDir = "N"
+            windIcon = ft.icons.ERROR_OUTLINE
+            windDirection = 0
+            windName = "error"
+    else:
+        origWinDir = "N"
+        windIcon = ft.icons.ERROR_OUTLINE
+        windDirection = 0
+        windName = "no conditions error"
     
     if weather.alerts and (not data.page.banner) and prefs["enableAlerts"]:
         print(weather.alerts)
         warningsNum = len(weather.alerts['warnings']['value'])
         watchesNum  = len(weather.alerts['watches']['value'])
-        if warningsNum > 1:
+        if warningsNum > 0:
             data.page.banner = (
                 ft.Banner(bgcolor=ft.colors.RED,
                         open= True,
@@ -151,7 +241,7 @@ def homePage(data: fteasy.Datasy):
                         content=ft.Text(f"NOTICE: thare are currently {warningsNum} weather warning/watche(s) in your area"),
                         actions=[ft.ElevatedButton("info",on_click=lambda _: data.go("/ALERT"))])
             )
-        elif watchesNum > 1:
+        elif watchesNum > 0:
             data.page.banner = (
                 ft.Banner(bgcolor=ft.colors.YELLOW,
                         open= True,
@@ -159,24 +249,40 @@ def homePage(data: fteasy.Datasy):
                         content=ft.Text(f"NOTICE: thares is currently {warningsNum} weather warnings/watches in your area"),
                         actions=[ft.ElevatedButton("info",on_click=lambda _: data.go("/ALERT"))])
             )
-    colum = ft.Column([ft.Row([ft.TextButton(content=
-                                            ft.Text(f"temp: ",size=24,style=buttonTheme),on_click=lambda _: data.go("/home/temp")),
-                                            ft.Text(f"{weather.conditions['temperature']['value']}℃",size=24,color=ft.colors.WHITE),
-                                            ft.Icon(ft.icons.ARROW_UPWARD,size=24,color=ft.colors.GREEN),
-                                            ft.Text(weather.conditions['high_temp']['value'],size=24,color=ft.colors.GREEN),
-                                            ft.Icon(ft.icons.ARROW_DOWNWARD,size=24,color=ft.colors.RED),
-                                            ft.Text(weather.conditions['low_temp']['value'],size=24,color=ft.colors.RED)]),
-                       ft.Row([ft.Icon(windIcon,rotate=windDirection),ft.Text(f"{windName} facing winds at {weather.conditions['wind_speed']['value']} km/h")])
-                       ],expand=True,width=360)
+    
+    if isFullConditions:
+        colum = ft.Column([ft.Row([ft.TextButton(content=
+                                                ft.Text(f"temp: ",size=24,style=buttonTheme),on_click=lambda _: data.go("/home/temp")),
+                                                ft.Text(f"{conditions['temperature']['value']}℃",size=24,color=ft.colors.WHITE),
+                                                ft.Icon(ft.icons.ARROW_UPWARD,size=24,color=ft.colors.GREEN),
+                                                ft.Text(conditions['high_temp']['value'],size=24,color=ft.colors.GREEN),
+                                                ft.Icon(ft.icons.ARROW_DOWNWARD,size=24,color=ft.colors.RED),
+                                                ft.Text(conditions['low_temp']['value'],size=24,color=ft.colors.RED)]),
+                        ft.Row([ft.Icon(windIcon,rotate=windDirection),ft.Text(f"{windName} facing winds at {conditions['wind_speed']['value']} km/h")])
+                        ],expand=True,width=360)
+        colum.controls.append(ft.Text(f"Wind chill: {conditions['wind_chill']['value']}℃"))
+    else:
+        colum = ft.Column([ft.Row([
+            ft.TextButton(content=ft.Text(f"temp: {conditions['temperature']}℃",size=24,color=ft.colors.WHITE))]),
+                        ft.Row([ft.Icon(windIcon,rotate=windDirection),ft.Text(f"{windName}")])
+                        ],expand=True,width=360)
+    
     
     #weather display
+    if prefs["iconTheme"] == "canada":
+        weatherThing = ft.Row([
+            # ft.Text("weather icon will be here"),
+            createIcon(conditions["icon_code"]['value']),
+            ft.Column([
+                ft.ElevatedButton("7 day forcast",on_click=lambda _: data.go("/home/7cast"))
+            ],expand=isFullConditions),
+            ft.Text(textwrap.fill(
+                conditions['text_summary']['value'] if isFullConditions else conditions['text_summary']
+                                  ),size=16)
+            ])
     
-    weatherThing = ft.Row([
-        ft.Text("weather icon will be here"),
-        ft.Column([
-            
-        ])
-        ])
+    # weatherThing.controls.append(ft.TextButton("test",on_click=lambda _: data.go("/home/7cast")))
+    
     # weatherThing.controls.append()
     
     
@@ -196,15 +302,18 @@ def homePage(data: fteasy.Datasy):
     
     bottomRow = ft.Row()
     #candada momten
+    # datetime.datetime()s
+    
     bottomRow.controls.append(ft.Container(
         ft.Row([ft.Text("Data Source: Environment and Climate Change Canada",color=ft.colors.BLACK),
                 ft.IconButton(ft.icons.INFO,on_click= \
                     lambda _:(data.page.launch_url('https://weather.gc.ca/canada_e.html')),
-                    icon_color=ft.colors.BLACK)]),
+                    icon_color=ft.colors.BLACK),
+                ft.Text(conditions['observationTime']['value'].strftime("observed at %H:%M on (%d/%m)"),color=ft.colors.BLACK)]),
         alignment=ft.alignment.bottom_left,bgcolor=ft.colors.with_opacity(0.8,ft.colors.WHITE),border_radius=10,expand=True,padding=ft.Padding(5,5,5,5)))
     
     bottomRow.controls.append(ft.Container(ft.IconButton(ft.icons.SETTINGS,on_click=lambda _:data.go("/setting"),scale=1.6),alignment=ft.alignment.bottom_right,border_radius=10,padding=ft.Padding(5,5,5,5)))
-    
+
     view.controls.append(bottomRow)
     return view
     # return ft.View()
@@ -215,11 +324,15 @@ def homePage(data: fteasy.Datasy):
     #     ],
     #     bgcolor=ft.colors.with_opacity(0.5,ft.colors.TRANSPARENT)
     # )
+    
 @app.page("/home/temp")
 def tempaturePage(data: fteasy.Datasy):
+    
     temp = weather.conditions['temperature']['value']
+    
     if temp < -30:
         colour = ft.colors.BLUE_900
+    
     elif temp < -10:
         colour = ft.colors.BLUE_800
     elif temp < 0:
@@ -230,20 +343,20 @@ def tempaturePage(data: fteasy.Datasy):
         colour = ft.colors.BLUE_300 
     
     # sunImage = ft.Container(ft.Image(src="assets/sun.png"),alignment=ft.alignment.bottom_right)
-    
-    
-    return ft.View("/home/temp",
-                   [ft.Column([
+    view = getDefaultView()
+    view.route = "/home/temp"
+    view.controls = [ft.Column([
                         ft.Text(f"right now: {weather.conditions['temperature']['value']}℃",size=42),
                         ft.Text(f"today's high: {weather.conditions['high_temp']['value']}℃",size=32),
                         ft.Text(f"today's low: {weather.conditions['low_temp']['value']}℃",size=32)])
                         # sunImage
-                   ],
-                   appbar=ft.AppBar(title=ft.Text("tempeture"),bgcolor=ft.colors.BLUE_700,color=ft.colors.WHITE),
-                   bgcolor=ft.colors.BLUE_700)
-
+                   ]
+    view.appbar = ft.AppBar(title=ft.Text("tempeture"),bgcolor=ft.colors.TRANSPARENT)
+    
+    return view
 @app.page("/ALERT")
 def warningsPage(data: fteasy.Datasy):
+    
     data.page.banner.open = False
     # data.page.banner = None
     alertStyle = ft.TextStyle(size=24,
@@ -279,18 +392,68 @@ def warningsPage(data: fteasy.Datasy):
     
     controls.append(ft.Text(f"raw json: {weather.alerts}"))
     controls.append(ft.Text("dev note: mkae this page look better wtf was i thinking."))
-    return ft.View("/ALERT",
-                   controls,
-                   appbar=ft.AppBar(title=ft.Text("IMPORTANT ALERTS")),
-                   bgcolor=ft.colors.BLACK)
+    
+    view = getDefaultView()
+    view.route = "/ALERT"
+    view.controls = controls
+    view.appbar = ft.AppBar(title=ft.Text("IMPORTANT ALERTS"))
+    return view
+
+@app.page("/errors/jsonempty",page_clear=True)
+def jsonEmptyError(data: fteasy.Datasy):
+    print("json empty")
+    for i in weather.__dir__():
+        print(f"{i}: ")
+        print(weather.__getattribute__(i))
+        print()
+    # exit(1)
+    return ft.View(controls=[ft.Text("error: got empty json for conditions ):")],appbar=ft.AppBar(title=ft.Text("ERROR!")))
+
+@app.page("/home/7cast")
+def sevenDayForcast(data: fteasy.Datasy):
+    view = getDefaultView()
+    view.route = "/home/7cast"
+    view.controls=[ft.Text("Forcast for the next seven days...")]
+    view.appbar=ft.AppBar(title=ft.Text("Forcast for the next seven days..."),bgcolor=ft.colors.TRANSPARENT)
+    
+    i:dict
+    print()
+    print(weather.daily_forecasts)
+    for i in weather.daily_forecasts:
+        print(i)
+        view.controls.append(ft.Card(ft.Container(
+            ft.Container( #soo many columns help )':
+                    ft.Column([
+                        
+                        ft.Row([
+                            createIcon(i['icon_code'],ft.Image()),
+                            ft.Column([
+                                ft.Text(i['period']),
+                                ft.Text(i["text_summary"],size=12,width=500),
+                                
+                                ])
+                        ]),
+                        ft.Text(f"temp: {i['temperature']}℃")]
+                    )
+                    ,padding=ft.Padding(10,10,10,10),bgcolor=ft.colors.TRANSPARENT
+                )
+            ),color=data.page.theme.color_scheme.inverse_surface,expand=0.5))
+    view.scroll = ft.ScrollMode.ADAPTIVE
+    
+    for i in data.page.theme.color_scheme.__dict__.values():
+        print(i)
+        view.controls.append(ft.Icon(ft.icons.CIRCLE,color=i))
+        
+    
+    return view
 
 @app.page("/setting")
 def setupPage(data: fteasy.Datasy):
-    view = ft.View(
-        appbar=ft.AppBar(title=ft.Text("Settings"),center_title=True)
-    )
+    view = getDefaultView()
+    view.appbar=ft.AppBar(title=ft.Text("Settings"),center_title=True,bgcolor=ft.colors.TRANSPARENT)
+    
     print(prefs)
-    def setPrefs(e):
+    def setPrefs(e=None):
         global prefs
         prefs["enableAlerts"] = switches[0].value
         savePrefs()
@@ -298,10 +461,9 @@ def setupPage(data: fteasy.Datasy):
     
     
     
-    
-    def mkSettingsContainer(name:str,switchID:int,color = ft.colors.RED_600) -> ft.Container:
+    def mkSettingsContainer(name:str,switchID:int,color = ft.colors.PRIMARY_CONTAINER) -> ft.Container:
         switches[switchID].on_change = setPrefs
-        def boxPress():
+        def boxPress(e):
             switches[switchID].value = not switches[switchID].value
             switches[switchID].update()
             setPrefs()
@@ -310,36 +472,142 @@ def setupPage(data: fteasy.Datasy):
                 bgcolor=color,
                 border_radius=5,
                 padding=ft.Padding(8,8,8,8),
-                shadow=ft.BoxShadow(
-                    spread_radius=1,
-                    blur_radius=6,
-                    offset=ft.Offset(0,3)
-                ),
                 ink=True,
                 on_click=boxPress
                 # padding=ft.Padding()
             )
+    
     view.controls.append(mkSettingsContainer("Weather Alerts",0))
+    
+    def saveThemeDropdown(e:ft.ControlEvent):
+        prefs["themeMode"] = e.data.lower()
+        savePrefs()
+    
+    themeDropDown = ft.Dropdown(options=[ft.dropdown.Option("Acrylic"),
+        ft.dropdown.Option("Mica"),
+        ft.dropdown.Option("Tabbed"),
+        ft.dropdown.Option("Opaque")],
+        label="theme mode",
+        on_change=saveThemeDropdown,
+        value=prefs["themeMode"].title())
+    view.controls.append(ft.Container(
+            themeDropDown
+        ,bgcolor=ft.colors.ORANGE_600,
+        border_radius=5,
+        padding=ft.Padding(8,8,8,8)
+        ))
+    
+    # view.controls.append(mkBlankSettingsContainer("Application Theme",ft.RadioGroup()))
+    
+    # aboutSheet = ft.BottomSheet(
+    #         ft.Column(
+    #             [   ft.Text("Licenses and stuff",size=42),
+    #                 ft.Text("Meteocons (v2.0)",size=32),ft.Text("uses mit license"),
+    #                 ft.TextField(value=licenses[0],read_only=True,multiline=True),
+    #                 ft.FilledButton("find it here!",on_click=lambda _:data.page.launch_url('https://github.com/basmilius/weather-icons'))],
+    #             scroll=True
+    #         ),
+    #         show_drag_handle=True,
+    #         is_scroll_controlled=True
+    #     )
+    
+    # def aboutSheetOpen(e):
+    #     aboutSheet.open = True
+    #     aboutSheet.update()
+    
+    # view.controls.append(aboutSheet)
+    
+    # view.controls.append(ft.Container(ft.FilledButton("Credits and open scource things used",on_click=aboutSheetOpen),alignment=ft.alignment.bottom_right))
     
     return view
 
+@app.page("/setting/setSTmanual")
+def stationChangePage(data: fteasy.Datasy):
+    view = getDefaultView()
+    
+    view.appbar=ft.AppBar(title=ft.Text("set station..."),center_title=True)
+    print(SiteList)
+    def pickInputType(e:ft.ControlEvent):
+        print(e.data)
+        view.controls.clear()
+        view.controls.append(inputTypePicker)
+        view.controls.append(ft.Divider())
+        if "man" in e.data:
+            stationInput = ft.TextField(label="station id.")
+            def saveST(e):
+                prefs["defaultST"] = stationInput.value
+                
+                global weather
+                weather = updateWeather(st=prefs["defaultST"])
+                data.go("/home")
+            
+            view.controls.append(ft.Row([stationInput,ft.FilledButton("enter.",on_click=saveST)]))
+        else:
+            
+            def searchStations(e:ft.ControlEvent):
+                term = stationInput.value
+            
+            stationInput = ft.TextField(hint_text="search stations...")
+            view.controls.append(ft.Row([stationInput,ft.IconButton(ft.icons.SEARCH,on_click=searchStations)]))
+        view.update()
+    inputTypePicker = ft.SegmentedButton([
+        ft.Segment("ser",label=ft.Text("Search"),icon=ft.Icon(ft.icons.SEARCH),expand=True),
+        ft.Segment("man",label=ft.Text("Manual"),icon=ft.Icon(ft.icons.ABC),expand=True)
+        ],selected=["ser"],width=data.page.width,on_change=pickInputType)
+    view.controls.append(inputTypePicker)
+    view.controls.append(ft.Text("pick one"))
+    
+    
+    return view
+    
 @app.config
 def configApp(pg:ft.Page):
-    config = flet_restyle.FletReStyleConfig()
-    # config.background = ft.colors.BLACK
     pg.title = "Weather"
-    
-    config.theme = ft.Theme(ft.colors.RED)
-    
-    #dont ask
-    config.custom_title_bar = False
-    config.frameless = False
-    flet_restyle.FletReStyle.apply_config(pg,config) #<- used just to blur background
-    pg.window_frameless = False
-    pg.window_title_bar_hidden = False
-    
+    # pg.appbar = ft.AppBar(ft.Text("test"))
+    pg.route
+    print(pg.platform)
+    print(accentcolordetect.accent())
+    if pg.platform != "web":
+        pg.theme = ft.Theme(color_scheme_seed=accentcolordetect.accent()[1],
+                            color_scheme=ft.ColorScheme())
+        pg.window_to_front()
+        if prefs["themeMode"] == "acrylic":
+            config = flet_restyle.FletReStyleConfig()
+            # config.background = ft.colors.BLACK
+            
+            
+            config.theme = ft.Theme(ft.colors.RED)
+            print(accentcolordetect.accent()[1])
+            #dont ask
+            config.custom_title_bar = False
+            config.frameless = False
+            pg.window_to_front()
+            flet_restyle.FletReStyle.apply_config(pg,config) #<- used just to blur background
+            pg.window_frameless = False
+            pg.window_title_bar_hidden = False
+        elif prefs["themeMode"] == "mica":
+            pg.window_to_front()
+            HWND = windll.user32.GetForegroundWindow()
+            win32mica.ApplyMica(HWND,Theme=win32mica.MicaTheme.AUTO)
+            print(accentcolordetect.accent())
+        elif prefs["themeMode"] == "tabbed":
+            pg.window_to_front()
+            HWND = windll.user32.GetForegroundWindow()
+            win32mica.ApplyMica(HWND,Theme=win32mica.MicaTheme.AUTO,Style=win32mica.MicaStyle.ALT)
+            print(accentcolordetect.accent())
+        elif prefs["themeMode"] == "opaque":
+            print("opaque")
+            
+        else:
+            raise ValueError(f"themeMode is not a proper value!\nit is: '{prefs['themeMode']}' when it should be one of [acrylic,tabbed,mica,opaque]!\nplease check the file at '{appdataLoc}\\hugie999\\weather\\prefs.json'")
+            
+    else:
+        prefs["themeMode"] = "opaque"
 
-
+app.page_404(page_clear=True)
+def Page404(data:fteasy.Datasy):
+    data.go("/home")
+    return ft.View(controls=[ft.Text("a")])
 app.run()
 
 # def main(page: ft.Page):
