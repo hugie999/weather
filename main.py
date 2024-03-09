@@ -141,11 +141,25 @@ if prefs["defaultST"]:
 else:
     weather = updateWeather(coords=getLocation())
 
+def autoUpdateWeather():
+    global weather
+    if prefs["defaultST"]:
+        weather = updateWeather(st= prefs["defaultST"])
+    else:
+        weather = updateWeather(coords=getLocation())
+
 # print(getLocation())
 # exit(1)
 
 print(weather.conditions)
 print("\n")
+
+# @app.page("/refresh",page_clear=True)
+# def refreshPage(data: fteasy.Datasy):
+#     time.sleep(1)
+#     data.go("/home")
+#     return ft.View()
+
 @app.page("/home",page_clear=True)
 def homePage(data: fteasy.Datasy):
     global weather
@@ -157,7 +171,7 @@ def homePage(data: fteasy.Datasy):
         center_title=True,
         bgcolor=ft.colors.TRANSPARENT,
         actions=[ft.ElevatedButton("Change location...",on_click=lambda _:data.go('/setting/setSTmanual')),
-                 ft.IconButton(ft.icons.REFRESH,on_click= lambda _:[weather := updateWeather(), data.go("/home"), print('a')]),
+                 ft.IconButton(ft.icons.REFRESH,on_click= lambda _:[autoUpdateWeather(),view.controls.clear(),view.update(),time.sleep(0.1), data.go("/home"), print('a')]),
                  ft.PopupMenuButton(items=[
                     ft.PopupMenuItem(icon=ft.icons.ABC,text="temp")
                 ]
@@ -302,14 +316,14 @@ def homePage(data: fteasy.Datasy):
     
     bottomRow = ft.Row()
     #candada momten
-    # datetime.datetime()s
     
     bottomRow.controls.append(ft.Container(
         ft.Row([ft.Text("Data Source: Environment and Climate Change Canada",color=ft.colors.BLACK),
                 ft.IconButton(ft.icons.INFO,on_click= \
                     lambda _:(data.page.launch_url('https://weather.gc.ca/canada_e.html')),
-                    icon_color=ft.colors.BLACK),
-                ft.Text(conditions['observationTime']['value'].strftime("observed at %H:%M on (%d/%m)"),color=ft.colors.BLACK)]),
+                    icon_color=ft.colors.BLACK)
+                # ft.Text(conditions['observationTime']['value'].strftime("observed at %H:%M on (%d/%m)"),color=ft.colors.BLACK)
+                ]),
         alignment=ft.alignment.bottom_left,bgcolor=ft.colors.with_opacity(0.8,ft.colors.WHITE),border_radius=10,expand=True,padding=ft.Padding(5,5,5,5)))
     
     bottomRow.controls.append(ft.Container(ft.IconButton(ft.icons.SETTINGS,on_click=lambda _:data.go("/setting"),scale=1.6),alignment=ft.alignment.bottom_right,border_radius=10,padding=ft.Padding(5,5,5,5)))
@@ -524,7 +538,7 @@ def setupPage(data: fteasy.Datasy):
 @app.page("/setting/setSTmanual")
 def stationChangePage(data: fteasy.Datasy):
     view = getDefaultView()
-    
+    view.scroll = True
     view.appbar=ft.AppBar(title=ft.Text("set station..."),center_title=True)
     print(SiteList)
     def pickInputType(e:ft.ControlEvent):
@@ -536,30 +550,65 @@ def stationChangePage(data: fteasy.Datasy):
             stationInput = ft.TextField(label="station id.")
             def saveST(e):
                 prefs["defaultST"] = stationInput.value
-                
+                savePrefs()
                 global weather
                 weather = updateWeather(st=prefs["defaultST"])
                 data.go("/home")
             
             view.controls.append(ft.Row([stationInput,ft.FilledButton("enter.",on_click=saveST)]))
-        else:
-            
+        elif "ser" in e.data:
+            def saveST(e:ft.ControlEvent):
+                prefs["defaultST"] = e.control.data
+                # print(e.data)
+                # print(e.__dict__)
+                # print(e.__class__)
+                savePrefs()
+                global weather
+                weather = updateWeather(st=prefs["defaultST"])
+                data.go("/home")
             def searchStations(e:ft.ControlEvent):
                 term = stationInput.value
-            
-            stationInput = ft.TextField(hint_text="search stations...")
+                print(e.__dict__)
+                print(e.__class__)
+                while len(view.controls) > 3:
+                    view.controls.pop()
+                matching = []
+                for i in SiteList:
+                    if term.lower() in i['name'].lower():
+                        matching.append(i)
+                # print(matching)
+                view.controls.append(ft.Divider())
+                for i in matching:
+                    view.controls.append(ft.FilledButton(i['name'],expand=0.3,width=view.page.width,data=f"{i['province']}/{i['id']}",on_click=saveST))
+                    print(f"{i['province']}/{i['id']}")
+                view.update()
+                # view.controls.append(ft.Row([stationInput,ft.IconButton(ft.icons.SEARCH,on_click=searchStations)]))
+                
+            stationInput = ft.TextField(hint_text="search stations...",expand=True,)
             view.controls.append(ft.Row([stationInput,ft.IconButton(ft.icons.SEARCH,on_click=searchStations)]))
+        elif "aut" in e.data:
+            view.controls.append(ft.Text("automatic selected.",theme_style=ft.TextTheme.body_large))
+            prefs["defaultST"] = None
+            # print(e.data)
+            # print(e.__dict__)
+            # print(e.__class__)
+            savePrefs()
+            global weather
+            weather = updateWeather(updateWeather(coords=getLocation()))
+            # data.go("/home")
+        else:
+            view.controls.append(ft.Text("pick one!"))
         view.update()
     inputTypePicker = ft.SegmentedButton([
         ft.Segment("ser",label=ft.Text("Search"),icon=ft.Icon(ft.icons.SEARCH),expand=True),
-        ft.Segment("man",label=ft.Text("Manual"),icon=ft.Icon(ft.icons.ABC),expand=True)
-        ],selected=["ser"],width=data.page.width,on_change=pickInputType)
+        ft.Segment("man",label=ft.Text("Manual"),icon=ft.Icon(ft.icons.ABC),expand=True),
+        ft.Segment("aut",label=ft.Text("Automatic"),icon=ft.Icon(ft.icons.AUTO_MODE),expand=True)
+        ],selected=[],allow_empty_selection=True,allow_multiple_selection=False,width=data.page.width,on_change=pickInputType)
     view.controls.append(inputTypePicker)
     view.controls.append(ft.Text("pick one"))
     
     
     return view
-    
 @app.config
 def configApp(pg:ft.Page):
     pg.title = "Weather"
@@ -569,14 +618,16 @@ def configApp(pg:ft.Page):
     print(accentcolordetect.accent())
     if pg.platform != "web":
         pg.theme = ft.Theme(color_scheme_seed=accentcolordetect.accent()[1],
-                            color_scheme=ft.ColorScheme())
+                            color_scheme=ft.ColorScheme(),
+                            page_transitions=ft.PageTransitionsTheme(windows=ft.PageTransitionTheme.CUPERTINO))
         pg.window_to_front()
+        
         if prefs["themeMode"] == "acrylic":
             config = flet_restyle.FletReStyleConfig()
             # config.background = ft.colors.BLACK
             
             
-            config.theme = ft.Theme(ft.colors.RED)
+            config.theme = pg.theme
             print(accentcolordetect.accent()[1])
             #dont ask
             config.custom_title_bar = False
