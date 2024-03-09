@@ -25,7 +25,7 @@ licenses = ("""none""",) # might use other open scource thingys
 SiteList = []
 print("open preferences...")                                             #theme mode [acrylic,mica,none]
 prefs = {"unit":"C","defaultST":None,"enableAlerts":True,"iconTheme":"canada","themeMode":"acrylic"}
-
+transparentStyleTheme = False
 icons = {"canada":()}
 
 def getDefaultView() -> ft.View:
@@ -154,29 +154,27 @@ def autoUpdateWeather():
 print(weather.conditions)
 print("\n")
 
-# @app.page("/refresh",page_clear=True)
-# def refreshPage(data: fteasy.Datasy):
-#     time.sleep(1)
-#     data.go("/home")
-#     return ft.View()
+
 
 @app.page("/home",page_clear=True)
 def homePage(data: fteasy.Datasy):
+    print(transparentStyleTheme)
     global weather
     print(data.page.views)
     view = getDefaultView()
     view.route = "/home"
     view.appbar = ft.AppBar(
-        title=ft.Text(f"Current weather for {weather.metadata['location']}"),
+        title=ft.Text(f"Current weather for {weather.metadata['location']} {weather.station_id[:2]} ({weather.metadata['station']})"),
         center_title=True,
-        bgcolor=ft.colors.TRANSPARENT,
+        bgcolor=(ft.colors.TRANSPARENT if transparentStyleTheme else None),
         actions=[ft.ElevatedButton("Change location...",on_click=lambda _:data.go('/setting/setSTmanual')),
-                 ft.IconButton(ft.icons.REFRESH,on_click= lambda _:[autoUpdateWeather(),view.controls.clear(),view.update(),time.sleep(0.1), data.go("/home"), print('a')]),
+                 ft.IconButton(ft.icons.REFRESH,on_click= lambda _:[autoUpdateWeather(),data.go("/"), print('a')]),
                  ft.PopupMenuButton(items=[
                     ft.PopupMenuItem(icon=ft.icons.ABC,text="temp")
                 ]
         )],
-        leading=None
+        leading=None,
+        toolbar_height=100
     )
     
     if weather.conditions == {}:
@@ -365,7 +363,7 @@ def tempaturePage(data: fteasy.Datasy):
                         ft.Text(f"today's low: {weather.conditions['low_temp']['value']}℃",size=32)])
                         # sunImage
                    ]
-    view.appbar = ft.AppBar(title=ft.Text("tempeture"),bgcolor=ft.colors.TRANSPARENT)
+    view.appbar = ft.AppBar(title=ft.Text("tempeture"),bgcolor=ft.colors.TRANSPARENT,center_title=True)
     
     return view
 @app.page("/ALERT")
@@ -387,7 +385,7 @@ def warningsPage(data: fteasy.Datasy):
                 ft.Text(f"{len(weather.alerts['warnings']['value'])} weather warning(s)",size=32,style=alertStyle)
             ]+warnings
             ),bgcolor=ft.colors.WHITE,
-            margin=ft.Margin(5,5,5,5),
+            padding=ft.Padding(5,5,5,5),
             border_radius=10
             ))
     if weather.alerts['watches']['value']:
@@ -400,7 +398,7 @@ def warningsPage(data: fteasy.Datasy):
                 ft.Text(f"{len(weather.alerts['watches']['value'])} weather warning(s)",size=32,style=alertStyle)
             ]+warnings
             ),bgcolor=ft.colors.WHITE,
-            margin=ft.Margin(5,5,5,5),
+            padding=ft.Padding(5,5,5,5),
             border_radius=10
             ))
     
@@ -410,7 +408,7 @@ def warningsPage(data: fteasy.Datasy):
     view = getDefaultView()
     view.route = "/ALERT"
     view.controls = controls
-    view.appbar = ft.AppBar(title=ft.Text("IMPORTANT ALERTS"))
+    view.appbar = ft.AppBar(title=ft.Text("IMPORTANT ALERTS"),center_title=True)
     return view
 
 @app.page("/errors/jsonempty",page_clear=True)
@@ -428,7 +426,7 @@ def sevenDayForcast(data: fteasy.Datasy):
     view = getDefaultView()
     view.route = "/home/7cast"
     view.controls=[ft.Text("Forcast for the next seven days...")]
-    view.appbar=ft.AppBar(title=ft.Text("Forcast for the next seven days..."),bgcolor=ft.colors.TRANSPARENT)
+    view.appbar=ft.AppBar(title=ft.Text("Forcast for the next seven days..."),bgcolor=ft.colors.TRANSPARENT,center_title=True)
     
     i:dict
     print()
@@ -510,6 +508,8 @@ def setupPage(data: fteasy.Datasy):
         border_radius=5,
         padding=ft.Padding(8,8,8,8)
         ))
+    
+    view.controls.append(ft.Text(f"weather metadata: {weather.station_id}"))
     
     # view.controls.append(mkBlankSettingsContainer("Application Theme",ft.RadioGroup()))
     
@@ -611,6 +611,7 @@ def stationChangePage(data: fteasy.Datasy):
     return view
 @app.config
 def configApp(pg:ft.Page):
+    global transparentStyleTheme
     pg.title = "Weather"
     # pg.appbar = ft.AppBar(ft.Text("test"))
     pg.route
@@ -619,9 +620,9 @@ def configApp(pg:ft.Page):
     if pg.platform != "web":
         pg.theme = ft.Theme(color_scheme_seed=accentcolordetect.accent()[1],
                             color_scheme=ft.ColorScheme(),
-                            page_transitions=ft.PageTransitionsTheme(windows=ft.PageTransitionTheme.CUPERTINO))
+                            page_transitions=ft.PageTransitionsTheme(windows=ft.PageTransitionTheme.FADE_UPWARDS))
         pg.window_to_front()
-        
+        transparentStyleTheme = True
         if prefs["themeMode"] == "acrylic":
             config = flet_restyle.FletReStyleConfig()
             # config.background = ft.colors.BLACK
@@ -648,7 +649,7 @@ def configApp(pg:ft.Page):
             print(accentcolordetect.accent())
         elif prefs["themeMode"] == "opaque":
             print("opaque")
-            
+            transparentStyleTheme = False
         else:
             raise ValueError(f"themeMode is not a proper value!\nit is: '{prefs['themeMode']}' when it should be one of [acrylic,tabbed,mica,opaque]!\nplease check the file at '{appdataLoc}\\hugie999\\weather\\prefs.json'")
             
