@@ -14,6 +14,7 @@ import accentcolordetect
 import datetime
 import sys
 import math
+import base64
 import textwrap
 import win32mica
 from copy import deepcopy
@@ -37,6 +38,9 @@ def getDefaultView() -> ft.View:
     return defaultView
 
 appdataLoc = os.getenv('APPDATA')
+tempdataLoc= os.getenv('Temp')
+print(f"appdata  @ {appdataLoc}")
+print(f"tempdata @ {tempdataLoc}")
 
 def createIcon(code:int,baseImg:ft.Image  =ft.Image(width=128),scale=1) -> ft.Image|ft.Icon:
     if code.__class__ == str:
@@ -550,9 +554,16 @@ def sevenDayForcast(data: fteasy.Datasy):
 @app.page("/home/Rcast")
 def radarPage(data: fteasy.Datasy):
     view = getDefaultView()
-    
+    view.appbar = ft.AppBar()
+    view.scroll = True
     radar = envcan.ECRadar(coordinates=getLocation())
+    asyncio.run(radar.update())
+    with open(tempdataLoc+"/HWeatherCAtempradar.gif","wb") as f:
+        f.write(asyncio.run(radar.image))
     
+    view.controls.append(ft.Image(src=tempdataLoc+"/HWeatherCAtempradar.gif"))
+    view.controls.append(ft.Image(src_base64=base64.encodebytes(radar).decode().replace("\n","")))
+    # print(radar.__dict__)
     return view
 
 @app.page("/setting")
