@@ -38,10 +38,42 @@ def getDefaultView() -> ft.View:
 
 appdataLoc = os.getenv('APPDATA')
 
-def createIcon(code:int,baseImg:ft.Image  =ft.Image(width=128,scale=2)) -> ft.Image:
-    if prefs["iconTheme"] == "canada":
-        baseImg.src = f"https://weather.gc.ca/weathericons/{code}.gif"
-
+def createIcon(code:int,baseImg:ft.Image  =ft.Image(width=128),scale=1) -> ft.Image|ft.Icon:
+    if code.__class__ == str:
+        code = int(code)
+    if not code:
+        baseImg.src = "assets/icons/badiconNIC.png"
+        baseImg.scale = 1
+        baseImg.border_radius = 10
+        baseImg.width = 96
+    else:
+        baseImg.scale = scale
+        if prefs["iconTheme"] == "canada":
+            baseImg.src = f"https://weather.gc.ca/weathericons/{str(code).zfill(2)}.gif"
+        elif prefs["iconTheme"] == "fletM3":
+            baseImg = ft.Icon(
+                [ft.icons.SUNNY,ft.icons.CLOUD_OUTLINED,ft.icons.CLOUD_CIRCLE_OUTLINED,
+                 ft.icons.CLOUD_CIRCLE,ft.icons.CLOUD_UPLOAD,ft.icons.CLOUD_DOWNLOAD,
+                 ft.icons.WATER_DROP_OUTLINED,ft.icons.SUNNY_SNOWING,ft.icons.SUNNY_SNOWING,
+                 ft.icons.THUNDERSTORM,ft.icons.CLOUD,ft.icons.CLOUDY_SNOWING,
+                 ft.icons.WATER_DROP_OUTLINED,ft.icons.WATER_DROP,ft.icons.GRAIN,
+                 ft.icons.CLOUDY_SNOWING,ft.icons.CLOUDY_SNOWING,ft.icons.SNOWING,
+                 ft.icons.SNOWING,ft.icons.THUNDERSTORM,ft.icons.FOGGY,
+                 ft.icons.FOGGY,ft.icons.CLOUD_CIRCLE_OUTLINED,ft.icons.DEHAZE,
+                 ft.icons.FOGGY,ft.icons.WIND_POWER_OUTLINED,ft.icons.SNOWING,
+                 ft.icons.GRAIN,ft.icons.WATER_DROP,ft.icons.MODE_NIGHT,
+                 ft.icons.MODE_NIGHT_OUTLINED,ft.icons.NIGHTS_STAY_OUTLINED,ft.icons.NIGHTS_STAY,
+                 ft.icons.CLOUD_UPLOAD,ft.icons.CLOUD_DOWNLOAD,ft.icons.WATER_DROP_OUTLINED,
+                 ft.icons.SNOWING,ft.icons.THUNDERSTORM,ft.icons.WIND_POWER,
+                 ft.icons.TORNADO_OUTLINED,ft.icons.TORNADO,ft.icons.WIND_POWER,
+                 ft.icons.FIREPLACE,ft.icons.VOLCANO_OUTLINED,ft.icons.ELECTRIC_BOLT,
+                 ft.icons.ELECTRIC_BOLT,ft.icons.STORM][code],size=128 if scale == 2 else None
+            )
+        else:
+            baseImg.src = f"assets/icons/{prefs['iconTheme']}/{str(code).zfill(2)}.png"
+            if prefs["iconTheme"] == "paint":
+                baseImg.scale /= 2
+        
     return baseImg
 
 def loadPrefs():
@@ -136,6 +168,8 @@ def getLocation() -> tuple:
     locCords = (loc.latitude,loc.longitude)
     return locCords
 
+weather:envcan.ECWeather
+
 if prefs["defaultST"]:
     weather = updateWeather(st= prefs["defaultST"])
 else:
@@ -154,7 +188,16 @@ def autoUpdateWeather():
 print(weather.conditions)
 print("\n")
 
-
+def genWindIcon(windDir:str = weather.conditions['wind_dir']['value']) -> ft.Icon:
+    try:
+        origWinDir = windDir
+        windIcon = ft.icons.ARROW_UPWARD
+        windDirection = math.radians(("N","NNE","NE","ENE","E","ESE", "SE", "SSE","S","SSW","SW","WSW","W","WNW","NW","NNW").index(origWinDir)*22.5)
+    except KeyError:
+        origWinDir = "N"
+        windIcon = ft.icons.ERROR_OUTLINE
+        windDirection = 0
+    return ft.Icon(windIcon,rotate=windDirection)
 
 @app.page("/home",page_clear=True)
 def homePage(data: fteasy.Datasy):
@@ -261,7 +304,9 @@ def homePage(data: fteasy.Datasy):
                         content=ft.Text(f"NOTICE: thares is currently {warningsNum} weather warnings/watches in your area"),
                         actions=[ft.ElevatedButton("info",on_click=lambda _: data.go("/ALERT"))])
             )
-    
+        else:
+            data.page.banner = None
+    row = ft.Row()
     if isFullConditions:
         colum = ft.Column([ft.Row([ft.TextButton(content=
                                                 ft.Text(f"temp: ",size=24,style=buttonTheme),on_click=lambda _: data.go("/home/temp")),
@@ -270,28 +315,34 @@ def homePage(data: fteasy.Datasy):
                                                 ft.Text(conditions['high_temp']['value'],size=24,color=ft.colors.GREEN),
                                                 ft.Icon(ft.icons.ARROW_DOWNWARD,size=24,color=ft.colors.RED),
                                                 ft.Text(conditions['low_temp']['value'],size=24,color=ft.colors.RED)]),
-                        ft.Row([ft.Icon(windIcon,rotate=windDirection),ft.Text(f"{windName} facing winds at {conditions['wind_speed']['value']} km/h")])
+                        ft.Row([genWindIcon(),ft.Text(f"{windName} facing winds at {conditions['wind_speed']['value']} km/h")])
                         ],expand=True,width=360)
         colum.controls.append(ft.Text(f"Wind chill: {conditions['wind_chill']['value']}℃"))
     else:
         colum = ft.Column([ft.Row([
             ft.TextButton(content=ft.Text(f"temp: {conditions['temperature']}℃",size=24,color=ft.colors.WHITE))]),
                         ft.Row([ft.Icon(windIcon,rotate=windDirection),ft.Text(f"{windName}")])
-                        ],expand=True,width=360)
-    
-    
+                        ],expand=0.3)
+    row.controls.append(colum)
+    if isFullConditions:
+        colum = ft.Column([
+            ft.Text("temp")
+            ],expand=0.3)
+    row.controls.append(colum)
     #weather display
-    if prefs["iconTheme"] == "canada":
-        weatherThing = ft.Row([
-            # ft.Text("weather icon will be here"),
-            createIcon(conditions["icon_code"]['value']),
-            ft.Column([
-                ft.ElevatedButton("7 day forcast",on_click=lambda _: data.go("/home/7cast"))
-            ],expand=isFullConditions),
-            ft.Text(textwrap.fill(
-                conditions['text_summary']['value'] if isFullConditions else conditions['text_summary']
-                                  ),size=16)
-            ])
+    # if prefs["iconTheme"] == "canada":
+    weatherThing = ft.Row([
+        # ft.Text("weather icon will be here"),
+        createIcon(conditions["icon_code"]['value'],scale=2),
+        ft.Column([
+            ft.FilledTonalButton("7 day forcast",on_click=lambda _: data.go("/home/7cast"),width=175),
+            ft.FilledTonalButton("hourly forcast",on_click=lambda _: data.go("/home/Hcast"),width=175),
+            ft.FilledTonalButton("radar",on_click=lambda _: data.go("/home/Rcast"),width=175)
+        ],spacing=4,expand=True),
+        ft.Text(textwrap.fill(
+            conditions['text_summary']['value'] if isFullConditions else conditions['text_summary']
+                                ),size=16)
+        ])
     
     # weatherThing.controls.append(ft.TextButton("test",on_click=lambda _: data.go("/home/7cast")))
     
@@ -308,7 +359,7 @@ def homePage(data: fteasy.Datasy):
                      )
         )
     
-    view.controls.append(ft.Container(colum,bgcolor=ft.colors.with_opacity(0.2,ft.colors.AMBER),expand=5,border_radius=10,padding=ft.Padding(5,2,5,2)))
+    view.controls.append(ft.Container(row,bgcolor=ft.colors.with_opacity(0.2,ft.colors.AMBER),expand=5,border_radius=10,padding=ft.Padding(5,2,5,2)))
     
     #credits and settings
     
@@ -459,6 +510,51 @@ def sevenDayForcast(data: fteasy.Datasy):
     
     return view
 
+@app.page("/home/Hcast")
+def sevenDayForcast(data: fteasy.Datasy):
+    view = getDefaultView()
+    view.route = "/home/Hcast"
+    view.controls=[ft.Text("Forcast for the next few hours...")]
+    view.appbar=ft.AppBar(title=ft.Text("Forcast for the next few hours..."),bgcolor=ft.colors.TRANSPARENT,center_title=True)
+    print()
+    print(weather.hourly_forecasts)
+    i:dict
+    p:datetime.datetime
+    for i in weather.hourly_forecasts:
+        print(i)
+        p = i['period']
+        view.controls.append(ft.Card(ft.Container(
+            ft.Container( #soo many columns help )':
+                    ft.Column([
+                        
+                        ft.Row([
+                            createIcon(i['icon_code'],ft.Image()),
+                            ft.Column([
+                                ft.Text(p.astimezone().strftime("%I:%M [%p] (%a %d)")),
+                                ft.Text(i["condition"],size=12,width=500),
+                                
+                                ])
+                        ]),
+                        ft.Row([ft.Icon(ft.icons.THERMOSTAT),ft.Text(f"temp: {i['temperature']}℃")]),
+                        ft.Row([ft.Icon(ft.icons.WATER_DROP),ft.Text(f"{i['precip_probability']} chance of percipitation")]),
+                        ft.Row([genWindIcon(i['wind_direction']),ft.Text(),ft.Text(f"{i['wind_direction']} facing winds at {i['wind_speed']}km/h")])]
+                    )
+                    ,padding=ft.Padding(10,10,10,10),bgcolor=ft.colors.TRANSPARENT
+                )
+            ),color=data.page.theme.color_scheme.inverse_surface,expand=0.5))
+    view.scroll = ft.ScrollMode.ADAPTIVE
+        
+    
+    return view
+
+@app.page("/home/Rcast")
+def radarPage(data: fteasy.Datasy):
+    view = getDefaultView()
+    
+    radar = envcan.ECRadar(coordinates=getLocation())
+    
+    return view
+
 @app.page("/setting")
 def setupPage(data: fteasy.Datasy):
     view = getDefaultView()
@@ -504,7 +600,22 @@ def setupPage(data: fteasy.Datasy):
         value=prefs["themeMode"].title())
     view.controls.append(ft.Container(
             themeDropDown
-        ,bgcolor=ft.colors.ORANGE_600,
+        ,bgcolor=ft.colors.PRIMARY_CONTAINER,
+        border_radius=5,
+        padding=ft.Padding(8,8,8,8)
+        ))
+    def iconPickerSelect(e:ft.ControlEvent):
+        print(e.control.value)
+        prefs['iconTheme'] = e.control.value
+        savePrefs()
+        
+    iconPicker = ft.TextField(
+        label="icon set",
+        on_submit=iconPickerSelect,
+        value=prefs["iconTheme"])
+    view.controls.append(ft.Container(
+            iconPicker
+        ,bgcolor=ft.colors.PRIMARY_CONTAINER,
         border_radius=5,
         padding=ft.Padding(8,8,8,8)
         ))
@@ -660,7 +771,7 @@ app.page_404(page_clear=True)
 def Page404(data:fteasy.Datasy):
     data.go("/home")
     return ft.View(controls=[ft.Text("a")])
-app.run()
+app.run(auth_token=None)
 
 # def main(page: ft.Page):
 #     gps = plyer.facades.GPS()
