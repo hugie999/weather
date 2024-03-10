@@ -27,7 +27,7 @@ licenses = ("""none""",) # might use other open scource thingys
 # envcan.ECWeather()
 SiteList = []
 print("open preferences...")                                             #theme mode [acrylic,mica,none]
-prefs = {"unit":"C","defaultST":None,"enableAlerts":True,"iconTheme":"canada","themeMode":"acrylic"}
+prefs = {"unit":"C","defaultST":None,"enableAlerts":True,"iconTheme":"canada","themeMode":"acrylic","prefsVersion":0,"compactMode":False}
 installedData = {"version":0}
 transparentStyleTheme = False
 icons = {"canada":()}
@@ -236,7 +236,7 @@ def homePage(data: fteasy.Datasy):
     view = getDefaultView()
     view.route = "/home"
     view.appbar = ft.AppBar(
-        title=ft.Text(f"Current weather for {weather.metadata['location']} {weather.station_id[:2]} ({weather.metadata['station']})"),
+        title=ft.Text(f"Current weather for {weather.metadata['location']} {weather.station_id[:2]} ({weather.metadata['station']})",max_lines=1,overflow=ft.TextOverflow.ELLIPSIS),
         center_title=True,
         bgcolor=(ft.colors.TRANSPARENT if transparentStyleTheme else None),
         actions=[ft.ElevatedButton("Change location...",on_click=lambda _:data.go('/setting/setSTmanual')),
@@ -246,7 +246,7 @@ def homePage(data: fteasy.Datasy):
                 ]
         )],
         leading=None,
-        toolbar_height=100
+        toolbar_height=40 if prefs["compactMode"] else 100
     )
     
     if weather.conditions == {}:
@@ -354,7 +354,10 @@ def homePage(data: fteasy.Datasy):
             )
         else:
             data.page.banner = None
-    row = ft.Row(alignment=ft.MainAxisAlignment.START)
+    elif not prefs["enableAlerts"]:
+        data.page.banner = None
+    
+    row = ft.Row(alignment=ft.MainAxisAlignment.SPACE_EVENLY)
     if isFullConditions:
         colum = ft.Column([ft.Row([ ft.Icon(ft.icons.THERMOSTAT),            
                                     ft.Text(f"temperature: ",size=24,style=buttonTheme),
@@ -435,11 +438,9 @@ def homePage(data: fteasy.Datasy):
             ft.FilledTonalButton("7 day forcast",on_click=lambda _: data.go("/home/7cast"),width=175,tooltip="View the forcast fot the next 7 days"),
             ft.FilledTonalButton("Hourly forcast",on_click=lambda _: data.go("/home/Hcast"),width=175,tooltip="View the forcast for the next few hours"),
             ft.FilledTonalButton("Radar",on_click=lambda _: data.go("/home/Rcast"),width=175,disabled=True,tooltip="Coming soon!")
-        ],spacing=4),
-        ft.Text(textwrap.fill(
-            conditions['text_summary']['value'] if isFullConditions else conditions['text_summary']
-                                ),size=16)
-        ])
+        ],spacing=4,alignment=ft.MainAxisAlignment.SPACE_EVENLY),
+        ft.Text(conditions['text_summary']['value'] if isFullConditions else conditions['text_summary'],size=16,max_lines=5,width=300)
+        ],alignment=ft.MainAxisAlignment.SPACE_AROUND)
     
     # weatherThing.controls.append(ft.TextButton("test",on_click=lambda _: data.go("/home/7cast")))
     
@@ -450,13 +451,13 @@ def homePage(data: fteasy.Datasy):
     #part whare stuffs added
     
     view.controls.append(
-        ft.Container(weatherThing,bgcolor=ft.colors.with_opacity(0.2,ft.colors.WHITE),border_radius=10,padding=ft.Padding(5,2,5,2),
-                     alignment=ft.alignment.top_right,
-                     expand=2
+        ft.Container(weatherThing,bgcolor=ft.colors.with_opacity(0.2,ft.colors.WHITE),border_radius=10,padding=ft.Padding(5,5,5,5),
+                     alignment=ft.alignment.center,
+                     expand=4
                      )
         )
     
-    view.controls.append(ft.Container(row,bgcolor=ft.colors.with_opacity(0.2,ft.colors.PRIMARY_CONTAINER),expand=5,border_radius=10,padding=ft.Padding(5,2,5,2)))
+    view.controls.append(ft.Container(row,bgcolor=ft.colors.with_opacity(0.2,ft.colors.PRIMARY_CONTAINER),expand=5,border_radius=10,padding=ft.Padding(5,5,5,5),alignment=ft.alignment.center))
     
     #credits and settings
     
@@ -725,6 +726,7 @@ def setupPage(data: fteasy.Datasy):
         ))
     
     view.controls.append(ft.Text(f"weather metadata: {weather.station_id}"))
+    view.controls.append(ft.Text(f"window size: {data.page.window_width},{data.page.window_height}"))
     
     view.controls.append(ft.TextButton("debug icons",on_click=lambda _: data.go('/debug/icons')))
     # view.controls.append(mkBlankSettingsContainer("Application Theme",ft.RadioGroup()))
@@ -840,6 +842,8 @@ def stationChangePage(data: fteasy.Datasy):
 def configApp(pg:ft.Page):
     global transparentStyleTheme
     pg.title = "Weather"
+    pg.window_min_height = 500
+    pg.window_min_width  = 800
     # pg.appbar = ft.AppBar(ft.Text("test"))
     pg.route
     print(pg.platform)
@@ -847,6 +851,8 @@ def configApp(pg:ft.Page):
     
     #delete this if porting
     assert pg.platform in [ft.PagePlatform.WINDOWS,ft.PagePlatform,"web"]
+    
+    
     
     if pg.platform != "web":
         pg.theme = ft.Theme(color_scheme_seed=accentcolordetect.accent()[1],
@@ -886,7 +892,9 @@ def configApp(pg:ft.Page):
             
     else:
         prefs["themeMode"] = "opaque"
-
+    
+    if prefs["compactMode"]:
+            pg.theme.visual_density = ft.ThemeVisualDensity.COMPACT
 app.page_404(page_clear=True)
 def Page404(data:fteasy.Datasy):
     data.go("/home")
