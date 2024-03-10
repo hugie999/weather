@@ -336,6 +336,9 @@ def homePage(data: fteasy.Datasy):
             ft.TextButton(content=ft.Text(f"temperature: {conditions['temperature']}℃",size=24,color=ft.colors.WHITE))]),
                         ft.Row([ft.Icon(windIcon,rotate=windDirection),ft.Text(f"{windName}")])
                         ],expand=0.3)
+    colum.controls.append(ft.Row([ft.Icon(ft.icons.FLIP_TO_BACK,size=24),ft.Text("Yesterday's weather:",theme_style=ft.TextThemeStyle.HEADLINE_LARGE)]))
+    
+    
     row.controls.append(colum)
     if isFullConditions:
         # aqi.current = 14
