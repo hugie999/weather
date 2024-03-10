@@ -336,9 +336,17 @@ def homePage(data: fteasy.Datasy):
             ft.TextButton(content=ft.Text(f"temperature: {conditions['temperature']}℃",size=24,color=ft.colors.WHITE))]),
                         ft.Row([ft.Icon(windIcon,rotate=windDirection),ft.Text(f"{windName}")])
                         ],expand=0.3)
-    colum.controls.append(ft.Row([ft.Icon(ft.icons.FLIP_TO_BACK,size=24),ft.Text("Yesterday's weather:",theme_style=ft.TextThemeStyle.HEADLINE_LARGE)]))
-    
-    
+    # colum.controls.append(ft.Row([ft.Icon(ft.icons.FLIP_TO_BACK,size=24),ft.Text("Yesterday's weather:",theme_style=ft.TextThemeStyle.HEADLINE_LARGE)]))
+    colum.controls.append(ft.ExpansionTile(
+        title=ft.Row([ft.Icon(ft.icons.FLIP_TO_BACK,size=24),ft.Text("Yesterday's weather:")]),
+        # title=ft.Text("a"),
+        controls=[ft.ListTile(title=ft.Text("high/low temperature"),leading=ft.Icon(ft.icons.THERMOSTAT))],
+        # expand=True,
+        width= 400,
+        maintain_state=True
+        ))
+    colum.controls.append(ft.Text("a"))
+    print(ft.ExpansionPanel)
     row.controls.append(colum)
     if isFullConditions:
         # aqi.current = 14
@@ -787,6 +795,10 @@ def configApp(pg:ft.Page):
     pg.route
     print(pg.platform)
     print(accentcolordetect.accent())
+    
+    #delete this if porting
+    assert pg.platform in [ft.PagePlatform.WINDOWS,ft.PagePlatform,"web"]
+    
     if pg.platform != "web":
         pg.theme = ft.Theme(color_scheme_seed=accentcolordetect.accent()[1],
                             color_scheme=ft.ColorScheme(),
