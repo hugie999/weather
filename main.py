@@ -212,6 +212,7 @@ def genWindIcon(windDir:str|int = weather.conditions['wind_bearing']['value']) -
 def homePage(data: fteasy.Datasy):
     print(transparentStyleTheme)
     global weather
+    print(weather.metadata)
     aqi = envcan.ECAirQuality(coordinates=getLocation())
     asyncio.run(aqi.update())
     print(aqi.__dict__)
@@ -299,14 +300,17 @@ def homePage(data: fteasy.Datasy):
     
     if weather.alerts and (not data.page.banner) and prefs["enableAlerts"]:
         print(weather.alerts)
-        warningsNum = len(weather.alerts['warnings']['value'])
-        watchesNum  = len(weather.alerts['watches']['value'])
+        warningsNum   = len(weather.alerts['warnings']['value'])
+        watchesNum    = len(weather.alerts['watches']['value'])
+        advisoriesNum = len(weather.alerts['advisories']['value'])
+        statementsNum = len(weather.alerts['statements']['value'])
+        
         if warningsNum > 0:
             data.page.banner = (
                 ft.Banner(bgcolor=ft.colors.RED,
                         open= True,
                         leading=ft.Icon(ft.icons.WARNING,color=ft.colors.WHITE),
-                        content=ft.Text(f"NOTICE: thare are currently {warningsNum} weather warning/watche(s) in your area"),
+                        content=ft.Text(f"NOTICE: thare are currently {warningsNum} weather warning(s)/watche(s) in your area"),
                         actions=[ft.ElevatedButton("info",on_click=lambda _: data.go("/ALERT"))])
             )
         elif watchesNum > 0:
@@ -314,7 +318,23 @@ def homePage(data: fteasy.Datasy):
                 ft.Banner(bgcolor=ft.colors.YELLOW,
                         open= True,
                         leading=ft.Icon(ft.icons.WARNING,color=ft.colors.WHITE),
-                        content=ft.Text(f"NOTICE: thares is currently {warningsNum} weather warnings/watches in your area"),
+                        content=ft.Text(f"NOTICE: thares is currently {warningsNum} weather warning(s)/watche(s) in your area"),
+                        actions=[ft.ElevatedButton("info",on_click=lambda _: data.go("/ALERT"))])
+            )
+        elif advisoriesNum > 0:
+            data.page.banner = (
+                ft.Banner(bgcolor=ft.colors.GREY_800,
+                        open= True,
+                        leading=ft.Icon(ft.icons.WARNING,color=ft.colors.WHITE),
+                        content=ft.Text(f"NOTICE: thares is currently {advisoriesNum} weather advisorys in your area",color=ft.colors.WHITE),
+                        actions=[ft.ElevatedButton("info",on_click=lambda _: data.go("/ALERT"))])
+            )
+        elif statementsNum > 0:
+            data.page.banner = (
+                ft.Banner(bgcolor=ft.colors.GREY_800,
+                        open= True,
+                        leading=ft.Icon(ft.icons.WARNING,color=ft.colors.WHITE),
+                        content=ft.Text(f"NOTICE: thares is currently {statementsNum} weather statments in your area",color=ft.colors.WHITE),
                         actions=[ft.ElevatedButton("info",on_click=lambda _: data.go("/ALERT"))])
             )
         else:
@@ -340,7 +360,7 @@ def homePage(data: fteasy.Datasy):
     colum.controls.append(ft.ExpansionTile(
         title=ft.Row([ft.Icon(ft.icons.FLIP_TO_BACK,size=24),ft.Text("Yesterday's weather:")]),
         # title=ft.Text("a"),
-        controls=[ft.ListTile(title=ft.Text("high/low temperature"),leading=ft.Icon(ft.icons.THERMOSTAT))],
+        controls=[ft.ListTile(title=ft.Text("high/low temperature"),leading=ft.Icon(ft.icons.THERMOSTAT),)],
         # expand=True,
         width= 400,
         maintain_state=True
@@ -348,15 +368,9 @@ def homePage(data: fteasy.Datasy):
     colum.controls.append(ft.Text("a"))
     print(ft.ExpansionPanel)
     row.controls.append(colum)
+    colum = ft.Column()
     if isFullConditions:
-        # aqi.current = 14
-        aqiTheme = copy.deepcopy(data.page.theme)
-        if aqi.current > 10:
-            aqiTheme.color_scheme_seed = airQualityColours[9]
-        else:
-            aqiTheme.color_scheme_seed = airQualityColours[round(aqi.current)-1]
-        aqiTheme.color_scheme = ft.ColorScheme(aqiTheme.color_scheme_seed)
-        print(aqiTheme)
+        
         colum = ft.Column([
             ft.Row([
                 ft.Icon(ft.icons.WATER_DROP),
@@ -365,18 +379,31 @@ def homePage(data: fteasy.Datasy):
             ft.Row([
                 ft.Icon(ft.icons.SUNNY),
                 ft.Text(f"UV Index: {conditions['uv_index']['value']}")
-                ]),
-            ft.Container(
-                ft.Column([
-                ft.Row([
-                    ft.Icon(ft.icons.AIR),
-                    ft.Text(f"Air quality: {aqi.current} (messured at {aqi.metadata['location']})"),
-                ]),
-                ft.Row([ft.Icon(ft.icons.TAG_FACES_OUTLINED,color=airQualityColours[0]),ft.ProgressBar(value=aqi.current/10,expand=True),ft.Icon(ft.icons.MOOD_BAD_OUTLINED,color=airQualityColours[9])])
-                ]),bgcolor=ft.colors.with_opacity(0.3,ft.colors.SECONDARY_CONTAINER),padding=ft.Padding(5,5,5,5),border_radius=10,theme=aqiTheme
-                ,tooltip="The canadian AQI scale goes from 1 to 10+",ink=True,on_click= lambda _: data.go("/home/AQI"))
+                ])
+            
             ],expand=0.3,width=360)
     row.controls.append(colum)
+    #aqi data
+    
+    # aqi.current = 14
+    aqiTheme = copy.deepcopy(data.page.theme)
+    if aqi.current > 10:
+        aqiTheme.color_scheme_seed = airQualityColours[9]
+    else:
+        aqiTheme.color_scheme_seed = airQualityColours[round(aqi.current)-1]
+    aqiTheme.color_scheme = ft.ColorScheme(aqiTheme.color_scheme_seed)
+    print(aqiTheme)
+    colum.controls.append(ft.Container(
+        ft.Column([
+        ft.Row([
+            ft.Icon(ft.icons.AIR),
+            ft.Text(f"Air quality: {aqi.current} (messured at {aqi.metadata['location']})"),
+        ]),
+        ft.Row([ft.Icon(ft.icons.TAG_FACES_OUTLINED,color=airQualityColours[0]),ft.ProgressBar(value=aqi.current/10,expand=True),ft.Icon(ft.icons.MOOD_BAD_OUTLINED,color=airQualityColours[9])])
+        ]),bgcolor=ft.colors.with_opacity(0.3,ft.colors.SECONDARY_CONTAINER),padding=ft.Padding(5,5,5,5),border_radius=10,theme=aqiTheme
+        ,tooltip="The canadian AQI scale goes from 1 to 10+",ink=True,on_click= lambda _: data.go("/home/AQI")))
+    
+    
     #weather display
     # if prefs["iconTheme"] == "canada":
     weatherThing = ft.Row([
