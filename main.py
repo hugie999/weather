@@ -372,9 +372,9 @@ def homePage(data: fteasy.Datasy):
         # ft.Text("weather icon will be here"),
         createIcon(conditions["icon_code"]['value'],scale=2),
         ft.Column([
-            ft.FilledTonalButton("7 day forcast",on_click=lambda _: data.go("/home/7cast"),width=175),
-            ft.FilledTonalButton("hourly forcast",on_click=lambda _: data.go("/home/Hcast"),width=175),
-            ft.FilledTonalButton("radar",on_click=lambda _: data.go("/home/Rcast"),width=175,disabled=True)
+            ft.FilledTonalButton("7 day forcast",on_click=lambda _: data.go("/home/7cast"),width=175,tooltip="View the forcast fot the next 7 days"),
+            ft.FilledTonalButton("Hourly forcast",on_click=lambda _: data.go("/home/Hcast"),width=175,tooltip="View the forcast for the next few hours"),
+            ft.FilledTonalButton("Radar",on_click=lambda _: data.go("/home/Rcast"),width=175,disabled=True,tooltip="Coming soon!")
         ],spacing=4),
         ft.Text(textwrap.fill(
             conditions['text_summary']['value'] if isFullConditions else conditions['text_summary']
