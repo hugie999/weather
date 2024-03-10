@@ -1,3 +1,6 @@
 
 /reference icons
 /.vs
+/build
+/dist
+main.spec

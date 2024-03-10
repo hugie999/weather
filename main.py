@@ -17,6 +17,7 @@ import math
 import copy
 import base64
 import textwrap
+import requests
 import win32mica
 from copy import deepcopy
 from ctypes import windll #for mica
@@ -27,6 +28,7 @@ licenses = ("""none""",) # might use other open scource thingys
 SiteList = []
 print("open preferences...")                                             #theme mode [acrylic,mica,none]
 prefs = {"unit":"C","defaultST":None,"enableAlerts":True,"iconTheme":"canada","themeMode":"acrylic"}
+installedData = {"version":0}
 transparentStyleTheme = False
 icons = {"canada":()}
 
@@ -132,7 +134,20 @@ except json.decoder.JSONDecodeError:
     print("make new prefs file")
     savePrefs()
 
-with open("site_list_towns_en.csv") as f:
+try:
+    os.stat(appdataLoc+"/hugie999/weather/CANDATA/sites_en.csv")
+except FileNotFoundError:
+    print("!!!DOWNLOAD SITE LIST!!!")
+    #download https://dd.weather.gc.ca/citypage_weather/docs/site_list_towns_en.csv
+    try:
+        os.mkdir(appdataLoc+"/hugie999/weather/CANDATA")
+    except FileExistsError:
+        pass
+    with open(appdataLoc+"/hugie999/weather/CANDATA/sites_en.csv","wb") as f:
+        r = requests.get("https://dd.weather.gc.ca/citypage_weather/docs/site_list_towns_en.csv")
+        f.write(r.content)
+    print("done.")
+with open(appdataLoc+"/hugie999/weather/CANDATA/sites_en.csv") as f:
     siteListCSV = csv.reader(f,delimiter=",")
     for i in siteListCSV:
         # print(i)
@@ -310,7 +325,7 @@ def homePage(data: fteasy.Datasy):
                 ft.Banner(bgcolor=ft.colors.RED,
                         open= True,
                         leading=ft.Icon(ft.icons.WARNING,color=ft.colors.WHITE),
-                        content=ft.Text(f"NOTICE: thare are currently {warningsNum} weather warning(s)/watche(s) in your area"),
+                        content=ft.Text(f"NOTICE: thare are currently {warningsNum} weather warning(s) in your area"),
                         actions=[ft.ElevatedButton("info",on_click=lambda _: data.go("/ALERT"))])
             )
         elif watchesNum > 0:
@@ -318,7 +333,7 @@ def homePage(data: fteasy.Datasy):
                 ft.Banner(bgcolor=ft.colors.YELLOW,
                         open= True,
                         leading=ft.Icon(ft.icons.WARNING,color=ft.colors.WHITE),
-                        content=ft.Text(f"NOTICE: thares is currently {warningsNum} weather warning(s)/watche(s) in your area"),
+                        content=ft.Text(f"NOTICE: thares is currently {warningsNum} weather watch(es) in your area"),
                         actions=[ft.ElevatedButton("info",on_click=lambda _: data.go("/ALERT"))])
             )
         elif advisoriesNum > 0:
@@ -334,7 +349,7 @@ def homePage(data: fteasy.Datasy):
                 ft.Banner(bgcolor=ft.colors.GREY_800,
                         open= True,
                         leading=ft.Icon(ft.icons.WARNING,color=ft.colors.WHITE),
-                        content=ft.Text(f"NOTICE: thares is currently {statementsNum} weather statments in your area",color=ft.colors.WHITE),
+                        content=ft.Text(f"NOTICE: thares is currently {statementsNum} special weather statments in your area",color=ft.colors.WHITE),
                         actions=[ft.ElevatedButton("info",on_click=lambda _: data.go("/ALERT"))])
             )
         else:
@@ -357,15 +372,23 @@ def homePage(data: fteasy.Datasy):
                         ft.Row([ft.Icon(windIcon,rotate=windDirection),ft.Text(f"{windName}")])
                         ],expand=0.3)
     # colum.controls.append(ft.Row([ft.Icon(ft.icons.FLIP_TO_BACK,size=24),ft.Text("Yesterday's weather:",theme_style=ft.TextThemeStyle.HEADLINE_LARGE)]))
-    colum.controls.append(ft.ExpansionTile(
-        title=ft.Row([ft.Icon(ft.icons.FLIP_TO_BACK,size=24),ft.Text("Yesterday's weather:")]),
-        # title=ft.Text("a"),
-        controls=[ft.ListTile(title=ft.Text("high/low temperature"),leading=ft.Icon(ft.icons.THERMOSTAT),)],
-        # expand=True,
-        width= 400,
-        maintain_state=True
-        ))
-    colum.controls.append(ft.Text("a"))
+    
+    #add this later
+    # colum.controls.append(ft.ExpansionTile(
+    #     title=ft.Row([ft.Icon(ft.icons.FLIP_TO_BACK,size=24),ft.Text("Yesterday's weather:")]),
+    #     # title=ft.Text("a"),
+    #     controls=[
+    #         ft.ListTile(title=ft.Text("high/low temperature"),leading=ft.Icon(ft.icons.THERMOSTAT),subtitle=ft.Row([
+    #          ft.Icon(ft.icons.ARROW_DOWNWARD)   
+    #         ]))
+        
+    #     ],
+    #     # expand=True,
+    #     width= 360,
+    #     maintain_state=True
+    #     ))
+    
+    # colum.controls.append(ft.Text("a"))
     print(ft.ExpansionPanel)
     row.controls.append(colum)
     colum = ft.Column()
