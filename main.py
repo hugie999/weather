@@ -388,7 +388,6 @@ def homePage(data: fteasy.Datasy):
     #     maintain_state=True
     #     ))
     
-    # colum.controls.append(ft.Text("a"))
     print(ft.ExpansionPanel)
     row.controls.append(colum)
     colum = ft.Column()
