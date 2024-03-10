@@ -192,13 +192,16 @@ def autoUpdateWeather():
 print(weather.conditions)
 print("\n")
 
-def genWindIcon(windDir:str = weather.conditions['wind_dir']['value']) -> ft.Icon:
+def genWindIcon(windDir:str|int = weather.conditions['wind_bearing']['value']) -> ft.Icon:
     try:
         origWinDir = windDir
         windIcon = ft.icons.ARROW_UPWARD
-        windDirection = math.radians(("N","NNE","NE","ENE","E","ESE", "SE", "SSE","S","SSW","SW","WSW","W","WNW","NW","NNW").index(origWinDir)*22.5)
+        if windDir.__class__ == int:
+            windDirection = windDir
+        else:
+            windDirection = math.radians(("N","NNE","NE","ENE","E","ESE", "SE", "SSE","S","SSW","SW","WSW","W","WNW","NW","NNW").index(origWinDir)*22.5)
     except KeyError:
-        origWinDir = "N"
+        origWinDir = 0
         windIcon = ft.icons.ERROR_OUTLINE
         windDirection = 0
     return ft.Icon(windIcon,rotate=windDirection)
@@ -310,28 +313,36 @@ def homePage(data: fteasy.Datasy):
             )
         else:
             data.page.banner = None
-    row = ft.Row()
+    row = ft.Row(alignment=ft.MainAxisAlignment.START)
     if isFullConditions:
-        colum = ft.Column([ft.Row([ft.TextButton(content=
-                                                ft.Text(f"temp: ",size=24,style=buttonTheme),on_click=lambda _: data.go("/home/temp")),
-                                                ft.Text(f"{conditions['temperature']['value']}℃",size=24,color=ft.colors.WHITE),
-                                                ft.Icon(ft.icons.ARROW_UPWARD,size=24,color=ft.colors.GREEN),
-                                                ft.Text(conditions['high_temp']['value'],size=24,color=ft.colors.GREEN),
-                                                ft.Icon(ft.icons.ARROW_DOWNWARD,size=24,color=ft.colors.RED),
-                                                ft.Text(conditions['low_temp']['value'],size=24,color=ft.colors.RED)]),
-                        ft.Row([genWindIcon(),ft.Text(f"{windName} facing winds at {conditions['wind_speed']['value']} km/h")])
-                        ],expand=True,width=360)
-        colum.controls.append(ft.Text(f"Wind chill: {conditions['wind_chill']['value']}℃"))
+        colum = ft.Column([ft.Row([ ft.Icon(ft.icons.THERMOSTAT),            
+                                    ft.Text(f"temperature: ",size=24,style=buttonTheme),
+                                    ft.Text(f"{conditions['temperature']['value']}℃",size=24,color=ft.colors.WHITE),
+                                    ft.Icon(ft.icons.ARROW_UPWARD,size=24,color=ft.colors.GREEN),
+                                    ft.Text(conditions['high_temp']['value'],size=24,color=ft.colors.GREEN),
+                                    ft.Icon(ft.icons.ARROW_DOWNWARD,size=24,color=ft.colors.RED),
+                                    ft.Text(conditions['low_temp']['value'],size=24,color=ft.colors.RED)]),
+                        ft.Row([genWindIcon(),ft.Text(f"{windName} ({conditions['wind_bearing']['value']}°) facing winds at {conditions['wind_speed']['value']} km/h")])
+                        ],expand=0.4)
+        colum.controls.append(ft.Row([ft.Icon(ft.icons.BLUR_ON),ft.Text(f"Wind chill: {conditions['wind_chill']['value']}℃")]))
     else:
         colum = ft.Column([ft.Row([
-            ft.TextButton(content=ft.Text(f"temp: {conditions['temperature']}℃",size=24,color=ft.colors.WHITE))]),
+            ft.TextButton(content=ft.Text(f"temperature: {conditions['temperature']}℃",size=24,color=ft.colors.WHITE))]),
                         ft.Row([ft.Icon(windIcon,rotate=windDirection),ft.Text(f"{windName}")])
                         ],expand=0.3)
     row.controls.append(colum)
     if isFullConditions:
         colum = ft.Column([
-            ft.Text("temp")
-            ],expand=0.3)
+            ft.Row([
+                ft.Icon(ft.icons.WATER_DROP),
+                ft.Text(f"Chance of percipitation: {conditions['pop']['value']+'%' if conditions['pop']['value'] else 'Unknown'}")
+                ]),
+            ft.Row([
+                ft.Icon(ft.icons.SUNNY),
+                ft.Text(f"UV Index: {conditions['uv_index']['value']}")
+                ])
+            
+            ],expand=0.3,width=360)
     row.controls.append(colum)
     #weather display
     # if prefs["iconTheme"] == "canada":
@@ -342,7 +353,7 @@ def homePage(data: fteasy.Datasy):
             ft.FilledTonalButton("7 day forcast",on_click=lambda _: data.go("/home/7cast"),width=175),
             ft.FilledTonalButton("hourly forcast",on_click=lambda _: data.go("/home/Hcast"),width=175),
             ft.FilledTonalButton("radar",on_click=lambda _: data.go("/home/Rcast"),width=175)
-        ],spacing=4,expand=True),
+        ],spacing=4),
         ft.Text(textwrap.fill(
             conditions['text_summary']['value'] if isFullConditions else conditions['text_summary']
                                 ),size=16)
@@ -633,6 +644,7 @@ def setupPage(data: fteasy.Datasy):
     
     view.controls.append(ft.Text(f"weather metadata: {weather.station_id}"))
     
+    view.controls.append(ft.TextButton("debug icons",on_click=lambda _: data.go('/debug/icons')))
     # view.controls.append(mkBlankSettingsContainer("Application Theme",ft.RadioGroup()))
     
     # aboutSheet = ft.BottomSheet(
@@ -654,6 +666,17 @@ def setupPage(data: fteasy.Datasy):
     # view.controls.append(aboutSheet)
     
     # view.controls.append(ft.Container(ft.FilledButton("Credits and open scource things used",on_click=aboutSheetOpen),alignment=ft.alignment.bottom_right))
+    
+    return view
+
+@app.page("/debug/icons")
+def iconsDebugPage(data: fteasy.Datasy):
+    view = getDefaultView()
+    view.appbar = ft.AppBar()
+    view.scroll = True
+    for i in (ft.icons.__dict__):
+        print(i)
+        view.controls.append(ft.Row([ft.Text(i),ft.Icon(i)]))
     
     return view
 
