@@ -14,6 +14,7 @@ import accentcolordetect
 import datetime
 import sys
 import math
+import copy
 import base64
 import textwrap
 import win32mica
@@ -37,6 +38,7 @@ def getDefaultView() -> ft.View:
     
     return defaultView
 
+airQualityColours = [ft.colors.BLUE_300,ft.colors.BLUE_500,ft.colors.BLUE_700,ft.colors.YELLOW_500,ft.colors.YELLOW_700,ft.colors.YELLOW_900,ft.colors.RED_300,ft.colors.RED_500,ft.colors.RED_800,ft.colors.RED_ACCENT_700]
 appdataLoc = os.getenv('APPDATA')
 tempdataLoc= os.getenv('Temp')
 print(f"appdata  @ {appdataLoc}")
@@ -210,6 +212,10 @@ def genWindIcon(windDir:str|int = weather.conditions['wind_bearing']['value']) -
 def homePage(data: fteasy.Datasy):
     print(transparentStyleTheme)
     global weather
+    aqi = envcan.ECAirQuality(coordinates=getLocation())
+    asyncio.run(aqi.update())
+    print(aqi.__dict__)
+    print(aqi.current)
     print(data.page.views)
     view = getDefaultView()
     view.route = "/home"
@@ -332,6 +338,14 @@ def homePage(data: fteasy.Datasy):
                         ],expand=0.3)
     row.controls.append(colum)
     if isFullConditions:
+        # aqi.current = 14
+        aqiTheme = copy.deepcopy(data.page.theme)
+        if aqi.current > 10:
+            aqiTheme.color_scheme_seed = airQualityColours[9]
+        else:
+            aqiTheme.color_scheme_seed = airQualityColours[round(aqi.current)-1]
+        aqiTheme.color_scheme = ft.ColorScheme(aqiTheme.color_scheme_seed)
+        print(aqiTheme)
         colum = ft.Column([
             ft.Row([
                 ft.Icon(ft.icons.WATER_DROP),
@@ -340,8 +354,16 @@ def homePage(data: fteasy.Datasy):
             ft.Row([
                 ft.Icon(ft.icons.SUNNY),
                 ft.Text(f"UV Index: {conditions['uv_index']['value']}")
-                ])
-            
+                ]),
+            ft.Container(
+                ft.Column([
+                ft.Row([
+                    ft.Icon(ft.icons.AIR),
+                    ft.Text(f"Air quality: {aqi.current} (messured at {aqi.metadata['location']})"),
+                ]),
+                ft.Row([ft.Icon(ft.icons.TAG_FACES_OUTLINED,color=airQualityColours[0]),ft.ProgressBar(value=aqi.current/10,expand=True),ft.Icon(ft.icons.MOOD_BAD_OUTLINED,color=airQualityColours[9])])
+                ]),bgcolor=ft.colors.with_opacity(0.3,ft.colors.SECONDARY_CONTAINER),padding=ft.Padding(5,5,5,5),border_radius=10,theme=aqiTheme
+                ,tooltip="The canadian AQI scale goes from 1 to 10+",ink=True,on_click= lambda _: data.go("/home/AQI"))
             ],expand=0.3,width=360)
     row.controls.append(colum)
     #weather display
@@ -352,7 +374,7 @@ def homePage(data: fteasy.Datasy):
         ft.Column([
             ft.FilledTonalButton("7 day forcast",on_click=lambda _: data.go("/home/7cast"),width=175),
             ft.FilledTonalButton("hourly forcast",on_click=lambda _: data.go("/home/Hcast"),width=175),
-            ft.FilledTonalButton("radar",on_click=lambda _: data.go("/home/Rcast"),width=175)
+            ft.FilledTonalButton("radar",on_click=lambda _: data.go("/home/Rcast"),width=175,disabled=True)
         ],spacing=4),
         ft.Text(textwrap.fill(
             conditions['text_summary']['value'] if isFullConditions else conditions['text_summary']
@@ -374,7 +396,7 @@ def homePage(data: fteasy.Datasy):
                      )
         )
     
-    view.controls.append(ft.Container(row,bgcolor=ft.colors.with_opacity(0.2,ft.colors.AMBER),expand=5,border_radius=10,padding=ft.Padding(5,2,5,2)))
+    view.controls.append(ft.Container(row,bgcolor=ft.colors.with_opacity(0.2,ft.colors.PRIMARY_CONTAINER),expand=5,border_radius=10,padding=ft.Padding(5,2,5,2)))
     
     #credits and settings
     
