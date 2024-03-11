@@ -1,0 +1,3 @@
+@echo off
+echo now building...
+flet pack main.py --product-name ca.hugie999.weatherCA --product-version 0 --copyright unknown -i .\assets-src\icon.ico -v
