@@ -226,6 +226,7 @@ def genWindIcon(windDir:str|int = weather.conditions['wind_bearing']['value']) -
 @app.page("/home",page_clear=True)
 def homePage(data: fteasy.Datasy):
     print(transparentStyleTheme)
+    data.page.title = ""
     global weather
     print(weather.metadata)
     aqi = envcan.ECAirQuality(coordinates=getLocation())
@@ -399,7 +400,7 @@ def homePage(data: fteasy.Datasy):
         colum = ft.Column([
             ft.Row([
                 ft.Icon(ft.icons.WATER_DROP),
-                ft.Text(f"Chance of percipitation: {conditions['pop']['value']+'%' if conditions['pop']['value'] else 'Unknown'}")
+                ft.Text(f"Chance of percipitation: {str(conditions['pop']['value'])+'%' if conditions['pop']['value'] else 'Unknown'}")
                 ]),
             ft.Row([
                 ft.Icon(ft.icons.SUNNY),
@@ -669,8 +670,9 @@ def setupPage(data: fteasy.Datasy):
     def setPrefs(e=None):
         global prefs
         prefs["enableAlerts"] = switches[0].value
+        prefs["compactMode"] = switches[1].value
         savePrefs()
-    switches = [ft.Switch(value=prefs["enableAlerts"])] #so i can make other code cleaner
+    switches = [ft.Switch(value=prefs["enableAlerts"]),ft.Switch(value=prefs["compactMode"])] #so i can make other code cleaner
     
     
     
@@ -691,6 +693,7 @@ def setupPage(data: fteasy.Datasy):
             )
     
     view.controls.append(mkSettingsContainer("Weather Alerts",0))
+    view.controls.append(mkSettingsContainer("Compact mode",1))
     
     def saveThemeDropdown(e:ft.ControlEvent):
         prefs["themeMode"] = e.data.lower()
@@ -851,9 +854,6 @@ def configApp(pg:ft.Page):
     
     #delete this if porting
     assert pg.platform in [ft.PagePlatform.WINDOWS,ft.PagePlatform,"web"]
-    
-    
-    
     if pg.platform != "web":
         pg.theme = ft.Theme(color_scheme_seed=accentcolordetect.accent()[1],
                             color_scheme=ft.ColorScheme(),
