@@ -1,4 +1,4 @@
-flet==0.20.2
+flet
 flet_easy
 requests
 env-canada
@@ -8,3 +8,4 @@ flet_restyle
 win32mica
 accentcolordetect
 winsdk
+pyinstaller

@@ -21,17 +21,18 @@ import requests
 import win32mica
 from copy import deepcopy
 from ctypes import windll #for mica
+import ctypes
 
 licenses = ("""none""",) # might use other open scource thingys
 
 # envcan.ECWeather()
 SiteList = []
 print("open preferences...")                                             #theme mode [acrylic,mica,none]
-prefs = {"unit":"C","defaultST":None,"enableAlerts":True,"iconTheme":"canada","themeMode":"acrylic","prefsVersion":0,"compactMode":False}
+prefs = {"unit":"C","defaultST":None,"enableAlerts":True,"iconTheme":"canada","themeMode":"acrylic","prefsVersion":0,"compactMode":False,"comfyMode":False}
 installedData = {"version":0}
 transparentStyleTheme = False
 icons = {"canada":()}
-
+print(sys.argv)
 def getDefaultView() -> ft.View:
     defaultView = ft.View()
     defaultView.bgcolor = ft.colors.TRANSPARENT
@@ -87,7 +88,7 @@ def createIcon(code:int,baseImg:ft.Image  =ft.Image(width=128),scale=1) -> ft.Im
 def loadPrefs():
     global prefs
     try:
-        if sys.argv[0] == "newPrefs":
+        if "--newPrefs" in sys.argv:
             raise FileNotFoundError
         with open(f"{appdataLoc}/hugie999/weather/prefs.json") as f:
             prefs = json.load(f)
@@ -210,13 +211,18 @@ print(weather.conditions)
 print("\n")
 
 def genWindIcon(windDir:str|int = weather.conditions['wind_bearing']['value']) -> ft.Icon:
+    print(f"windDir: {windDir}")
     try:
         origWinDir = windDir
         windIcon = ft.icons.ARROW_UPWARD
         if windDir.__class__ == int:
             windDirection = windDir
         else:
-            windDirection = math.radians(("N","NNE","NE","ENE","E","ESE", "SE", "SSE","S","SSW","SW","WSW","W","WNW","NW","NNW").index(origWinDir)*22.5)
+            if windDir[:2] == "VR":
+                windIcon = ft.icons.QUESTION_MARK_OUTLINED
+                windDirection = 0
+            else:
+                windDirection = math.radians(("N","NNE","NE","ENE","E","ESE", "SE", "SSE","S","SSW","SW","WSW","W","WNW","NW","NNW").index(origWinDir)*22.5)
     except KeyError:
         origWinDir = 0
         windIcon = ft.icons.ERROR_OUTLINE
@@ -226,7 +232,7 @@ def genWindIcon(windDir:str|int = weather.conditions['wind_bearing']['value']) -
 @app.page("/home",page_clear=True)
 def homePage(data: fteasy.Datasy):
     print(transparentStyleTheme)
-    data.page.title = ""
+    # data.page.title = ""
     global weather
     print(weather.metadata)
     aqi = envcan.ECAirQuality(coordinates=getLocation())
@@ -236,8 +242,9 @@ def homePage(data: fteasy.Datasy):
     print(data.page.views)
     view = getDefaultView()
     view.route = "/home"
+    appTitle = ft.Text(f"Current weather for {weather.metadata['location']} {weather.station_id[:2]} ({weather.metadata['station']})",max_lines=1,overflow=ft.TextOverflow.ELLIPSIS)
     view.appbar = ft.AppBar(
-        title=ft.Text(f"Current weather for {weather.metadata['location']} {weather.station_id[:2]} ({weather.metadata['station']})",max_lines=1,overflow=ft.TextOverflow.ELLIPSIS),
+        title=appTitle,
         center_title=True,
         bgcolor=(ft.colors.TRANSPARENT if transparentStyleTheme else None),
         actions=[ft.ElevatedButton("Change location...",on_click=lambda _:data.go('/setting/setSTmanual')),
@@ -249,7 +256,7 @@ def homePage(data: fteasy.Datasy):
         leading=None,
         toolbar_height=40 if prefs["compactMode"] else 100
     )
-    
+    print(f"title size: {appTitle.spans}")
     if weather.conditions == {}:
         print("no conditions!")
         conditions = weather.daily_forecasts[0]
@@ -617,9 +624,14 @@ def sevenDayForcast(data: fteasy.Datasy):
     view.appbar=ft.AppBar(title=ft.Text("Forcast for the next few hours..."),bgcolor=ft.colors.TRANSPARENT,center_title=True)
     print()
     print(weather.hourly_forecasts)
+    
     i:dict
     p:datetime.datetime
     for i in weather.hourly_forecasts:
+        if i['wind_direction'][:2] == "VR":
+            windText= ft.Text(f"winds at {i['wind_speed']} km/h")
+        else:
+            windText= ft.Text(f"{i['wind_direction']} facing winds at {i['wind_speed']} km/h")
         print(i)
         p = i['period']
         view.controls.append(ft.Card(ft.Container(
@@ -634,13 +646,14 @@ def sevenDayForcast(data: fteasy.Datasy):
                                 
                                 ])
                         ]),
-                        ft.Row([ft.Icon(ft.icons.THERMOSTAT),ft.Text(f"temp: {i['temperature']}℃")]),
-                        ft.Row([ft.Icon(ft.icons.WATER_DROP),ft.Text(f"{i['precip_probability']} chance of percipitation")]),
-                        ft.Row([genWindIcon(i['wind_direction']),ft.Text(),ft.Text(f"{i['wind_direction']} facing winds at {i['wind_speed']}km/h")])]
+                        ft.Row([
+                            ft.Row([ft.Icon(ft.icons.THERMOSTAT),ft.Text(f"temp: {i['temperature']}℃")]),
+                            ft.Row([ft.Icon(ft.icons.WATER_DROP),ft.Text(f"{i['precip_probability']} chance of percipitation")]),
+                            ft.Row([genWindIcon(i['wind_direction']),windText])])]
                     )
                     ,padding=ft.Padding(10,10,10,10),bgcolor=ft.colors.TRANSPARENT
                 )
-            ),color=data.page.theme.color_scheme.inverse_surface,expand=0.5))
+            ),color=ft.colors.with_opacity(0.5,data.page.theme.color_scheme.inverse_surface),expand=0.5))
     view.scroll = ft.ScrollMode.ADAPTIVE
         
     
@@ -670,9 +683,16 @@ def setupPage(data: fteasy.Datasy):
     def setPrefs(e=None):
         global prefs
         prefs["enableAlerts"] = switches[0].value
-        prefs["compactMode"] = switches[1].value
+        if switches[1].value and switches[2].value:
+            switches[1].value, switches[2].value = False,False
+            switches[2].update()
+            switches[1].update()
+        else:
+            prefs["compactMode"] = switches[1].value
+            prefs["comfyMode"] = switches[2].value
+            
         savePrefs()
-    switches = [ft.Switch(value=prefs["enableAlerts"]),ft.Switch(value=prefs["compactMode"])] #so i can make other code cleaner
+    switches = [ft.Switch(value=prefs["enableAlerts"]),ft.Switch(value=prefs["compactMode"]),ft.Switch(value=prefs["comfyMode"])] #so i can make other code cleaner
     
     
     
@@ -689,11 +709,13 @@ def setupPage(data: fteasy.Datasy):
                 padding=ft.Padding(8,8,8,8),
                 ink=True,
                 on_click=boxPress
+                ,disabled=switchID == 2
                 # padding=ft.Padding()
             )
     
     view.controls.append(mkSettingsContainer("Weather Alerts",0))
     view.controls.append(mkSettingsContainer("Compact mode",1))
+    view.controls.append(mkSettingsContainer("Comfy mode",2))
     
     def saveThemeDropdown(e:ft.ControlEvent):
         prefs["themeMode"] = e.data.lower()
@@ -847,10 +869,17 @@ def configApp(pg:ft.Page):
     pg.title = "Weather"
     pg.window_min_height = 500
     pg.window_min_width  = 800
+    # pg.window_title_bar_hidden = True
     # pg.appbar = ft.AppBar(ft.Text("test"))
     pg.route
     print(pg.platform)
     print(accentcolordetect.accent())
+    
+    pg.window_to_front()
+    HWND = windll.user32.GetForegroundWindow()
+    
+    
+    # print(pg.on_route_change.)
     
     #delete this if porting
     assert pg.platform in [ft.PagePlatform.WINDOWS,ft.PagePlatform,"web"]
@@ -870,18 +899,15 @@ def configApp(pg:ft.Page):
             #dont ask
             config.custom_title_bar = False
             config.frameless = False
+            
             pg.window_to_front()
             flet_restyle.FletReStyle.apply_config(pg,config) #<- used just to blur background
             pg.window_frameless = False
             pg.window_title_bar_hidden = False
         elif prefs["themeMode"] == "mica":
-            pg.window_to_front()
-            HWND = windll.user32.GetForegroundWindow()
             win32mica.ApplyMica(HWND,Theme=win32mica.MicaTheme.AUTO)
             print(accentcolordetect.accent())
         elif prefs["themeMode"] == "tabbed":
-            pg.window_to_front()
-            HWND = windll.user32.GetForegroundWindow()
             win32mica.ApplyMica(HWND,Theme=win32mica.MicaTheme.AUTO,Style=win32mica.MicaStyle.ALT)
             print(accentcolordetect.accent())
         elif prefs["themeMode"] == "opaque":
@@ -894,12 +920,24 @@ def configApp(pg:ft.Page):
         prefs["themeMode"] = "opaque"
     
     if prefs["compactMode"]:
-            pg.theme.visual_density = ft.ThemeVisualDensity.COMPACT
-app.page_404(page_clear=True)
+        pg.theme.visual_density = ft.ThemeVisualDensity.COMPACT
+    elif prefs["comfyMode"]:
+        pg.theme.visual_density = ft.ThemeVisualDensity.COMFORTABLE
+    else:
+        pg.theme.visual_density = ft.ThemeVisualDensity.STANDARD
+        
+@app.page_404(page_clear=True)
 def Page404(data:fteasy.Datasy):
     data.go("/home")
     return ft.View(controls=[ft.Text("a")])
-app.run(auth_token=None)
+@app.view
+async def view(data: fteasy.Datasy):
+    data.view.controls.append(ft.Text("yto"))
+    
+    return ft.View("/",[ft.Text("a")])
+
+
+app.run()
 
 # def main(page: ft.Page):
 #     gps = plyer.facades.GPS()

@@ -1,9 +1,3 @@
-# A canada-alerts Flet app
+# A kinda ok weather app!
 
-An example of a minimal Flet app.
-
-To run the app:
-
-```
-flet run [app_directory]
-```
+a weather app made in flet useing evirenment and climate change canada data!
